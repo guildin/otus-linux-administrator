@@ -153,3 +153,6 @@ vagrant cloud auth login
 ...
 vagrant cloud publish --release atikhonov/centos-7-9 1.0 virtualbox centos-7.9.2009-kernel-5-x86_64-Minimal.box
 ```
+*upd.* Так не сработало, для загрузки образа пришлось создать соответствующий бокс на ```https://app.vagrantup.com/boxes/new```, после чего образ в облако залился.
+
+
