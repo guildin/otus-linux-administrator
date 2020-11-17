@@ -1,0 +1,66 @@
+# Describe VMs
+MACHINES = {
+  # VM name "kernel update"
+  :"mdadm-lab" => {
+              # VM box
+              :box_name => "atikhonov/centos-7-9",
+              # VM CPU count
+              :cpus => 4,
+              # VM RAM size (Mb)
+              :memory => 4096,
+              # networks
+              :net => [],
+              # forwarded ports
+              :forwarded_port => []
+            }
+}
+
+Vagrant.configure("2") do |config|
+  MACHINES.each do |boxname, boxconfig|
+    # Disable shared folders
+    config.vm.synced_folder ".", "/vagrant", disabled: true
+    # Apply VM config
+    config.ssh.private_key_path = ['~/.ssh/vagrant.ec.privateKey', '~/.vagrant.d/insecure_private_key']
+    config.vm.define boxname do |box|
+      # Set VM base box and hostname
+      box.vm.box = boxconfig[:box_name]
+      box.vm.host_name = boxname.to_s
+
+      # Additional network config if present
+      if boxconfig.key?(:net)
+        boxconfig[:net].each do |ipconf|
+          box.vm.network "private_network", ipconf
+        end
+      end
+      # Port-forward config if present
+      if boxconfig.key?(:forwarded_port)
+        boxconfig[:forwarded_port].each do |port|
+          box.vm.network "forwarded_port", port
+        end
+      end
+      # VM resources config
+      box.vm.provider "virtualbox" do |v|
+        # Set VM RAM size and CPU count
+        v.memory = boxconfig[:memory]
+        v.cpus = boxconfig[:cpus]
+        
+        v.customize ['storagectl', :id, '--name', 'SATA Controller', '--add', 'sata', '--portcount', 8]
+        (0..5).each do |i|
+          if not File.exists?("./additionalDisk#{i}.vdi")
+            v.customize ['createhd', '--filename', "./additionalDisk#{i}.vdi", '--variant', 'Fixed', '--size', 1024]
+          end
+          v.customize ['storageattach', :id,  '--storagectl', 'SATA Controller', '--port', "#{i}", '--device', 0, '--type', 'hdd', '--medium', "./additionalDisk#{i}.vdi"]
+        end
+      end
+      $provision_script = <<-SCRIPT
+      yum install -y mdadm
+      mdadm --create --verbose /dev/md0 --level=10 --raid-devices=4 /dev/sdb /dev/sdc /dev/sdd /dev/sde
+      mkfs.ext4 /dev/md0
+      mkdir /mnt/storage
+      mount -t ext4 /dev/md0 /mnt/storage
+      SCRIPT
+      box.vm.provision "shell", inline: $provision_script
+    config.ssh
+    end
+  end
+end
